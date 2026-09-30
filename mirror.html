@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>거울 반사 매칭 퍼즐</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Nunito', 'Jua', sans-serif;
+            background-color: #1e1b4b; /* 부드러운 딥 퍼플/네이비 */
+            color: #f8fafc;
+            touch-action: none;
+            overflow: hidden;
+            user-select: none;
+        }
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+        canvas {
+            background-color: #2e2b5e; 
+            border-radius: 24px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(255,255,255,0.05);
+            max-width: 100%;
+            touch-action: none;
+        }
+        .btn {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            font-weight: 700;
+            padding: 0.75rem 1.5rem;
+            border-radius: 999px;
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.4);
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(99, 102, 241, 0.6);
+            background: linear-gradient(135deg, #818cf8, #a78bfa);
+        }
+        .btn:active {
+            transform: translateY(1px);
+        }
+        .hidden { display: none !important; }
+        
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1.5rem;
+        }
+        .pointer-events-auto { pointer-events: auto; }
+        
+        .modal {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(10px);
+        }
+
+        /* 탭 버튼 스타일 */
+        .tab-btn {
+            padding: 0.5rem 1.5rem;
+            border-radius: 12px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .tab-active {
+            background-color: #6366f1; /* indigo-500 */
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+        .tab-inactive {
+            background-color: rgba(49, 46, 129, 0.5); /* indigo-900/50 */
+            color: #a5b4fc; /* indigo-300 */
+            border: 1px solid #4338ca;
+        }
+        .tab-inactive:hover {
+            background-color: rgba(67, 56, 202, 0.5);
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="relative flex justify-center items-center">
+        <canvas id="gameCanvas" width="600" height="600"></canvas>
+    </div>
+</div>
+
+<div id="ui-layer">
+    <div class="flex justify-between items-start pointer-events-auto w-full max-w-2xl mx-auto mt-2">
+        <div>
+            <h1 class="text-3xl font-bold text-indigo-300 drop-shadow-lg tracking-wide">쌍둥이 거울 퍼즐</h1>
+            <p id="level-display" class="text-xl text-indigo-200 font-semibold mt-1">기본 1단계 / 20</p>
+        </div>
+        <div class="flex gap-2 sm:gap-3">
+            <button id="rules-btn" class="btn !bg-purple-900 !from-purple-800 !to-purple-900 shadow-none hover:!bg-purple-700">규칙</button>
+            <button id="reset-btn" class="btn">다시하기</button>
+            <button id="menu-btn" class="btn !bg-indigo-900 !from-indigo-800 !to-indigo-900 shadow-none hover:!bg-indigo-700">메뉴</button>
+        </div>
+    </div>
+    
+    <div id="instruction-text" class="text-center pb-6 text-indigo-200 text-base drop-shadow-md font-medium">
+        격자를 클릭해 거울을 회전시키고, 동일한 그림끼리 레이저를 연결하세요!
+    </div>
+</div>
+
+<!-- 게임 규칙 모달 -->
+<div id="rules-modal" class="modal hidden absolute inset-0 flex items-center justify-center z-50 pointer-events-auto p-4">
+    <div class="bg-indigo-950 p-6 sm:p-8 rounded-3xl shadow-2xl border border-indigo-800 max-w-md w-full text-left relative">
+        <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300 mb-4 flex items-center gap-2">
+            📖 게임 규칙
+        </h2>
+        <div class="space-y-3 text-indigo-100 text-sm sm:text-base leading-relaxed">
+            <div class="bg-indigo-900/40 p-3 rounded-xl border border-indigo-800/60">
+                <p class="font-bold text-indigo-300 mb-1">🎯 목표</p>
+                <p>외곽의 **동일한 그림(이모지) 쌍**끼리 레이저 빛이 정확히 연결되도록 거울을 조정하세요.</p>
+            </div>
+            <div class="bg-indigo-900/40 p-3 rounded-xl border border-indigo-800/60">
+                <p class="font-bold text-indigo-300 mb-1">🪞 거울 회전</p>
+                <p>칸을 클릭/터치할 때마다 **[빈칸 ➔ / 거울 ➔ \ 거울]** 순으로 순환하며 바뀝니다.</p>
+            </div>
+            <div class="bg-indigo-900/40 p-3 rounded-xl border border-indigo-800/60">
+                <p class="font-bold text-indigo-300 mb-1">⚡ 양면 반사</p>
+                <p>모든 거울은 입사각에 맞춰 빛을 90도로 꺾어 반사하는 양면 거울입니다.</p>
+            </div>
+            <div class="bg-indigo-900/40 p-3 rounded-xl border border-indigo-800/60">
+                <p class="font-bold text-indigo-300 mb-1">🧩 난이도 구분</p>
+                <p>• <strong class="text-indigo-300">기본:</strong> 테두리가 강조된 <b>[네모칸]</b>에만 거울 설치 가능 (4x4)<br>
+                • <strong class="text-purple-300">어려움:</strong> 5x5 전체 칸에 자유롭게 거울 배치 가능 (최대 8쌍 매칭)</p>
+            </div>
+        </div>
+        <button id="close-rules-btn" class="btn w-full mt-6 py-2.5 text-center">확인</button>
+    </div>
+</div>
+
+<!-- 메인 메뉴 -->
+<div id="main-menu" class="modal absolute inset-0 flex items-center justify-center z-50 pointer-events-auto">
+    <div class="bg-indigo-950 p-8 rounded-3xl shadow-2xl border border-indigo-800 max-w-lg w-full text-center">
+        <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 mb-2">거울 반사 퍼즐</h1>
+        <p class="text-indigo-200 mb-6 text-lg font-medium">같은 그림이 연결되게 거울을 배치하세요.</p>
+        
+        <!-- 난이도 탭 -->
+        <div class="flex justify-center gap-4 mb-6">
+            <button id="tab-basic" class="tab-btn tab-active">기본 (고정 네모칸 4x4)</button>
+            <button id="tab-hard" class="tab-btn tab-inactive">어려움 (자유 배치 5x5)</button>
+        </div>
+
+        <div id="level-grid" class="grid grid-cols-5 gap-3 mb-4 min-h-[240px] content-start">
+            <!-- 레벨 버튼 주입 -->
+        </div>
+    </div>
+</div>
+
+<!-- 클리어 모달 -->
+<div id="level-complete" class="modal hidden absolute inset-0 flex items-center justify-center z-50 pointer-events-auto">
+    <div class="bg-indigo-950 p-8 rounded-3xl shadow-2xl border border-indigo-800 max-w-sm w-full text-center">
+        <div class="text-6xl mb-4">✨</div>
+        <h2 class="text-3xl font-bold text-purple-300 mb-4">성공!</h2>
+        <p id="complete-msg" class="text-indigo-200 mb-8 text-lg">모든 그림의 레이저가 연결되었습니다.</p>
+        <button id="next-level-btn" class="btn w-full text-lg py-3">다음 단계로</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // UI 요소
+    const levelDisplay = document.getElementById('level-display');
+    const instructionText = document.getElementById('instruction-text');
+    const resetBtn = document.getElementById('reset-btn');
+    const menuBtn = document.getElementById('menu-btn');
+    const rulesBtn = document.getElementById('rules-btn');
+    const rulesModal = document.getElementById('rules-modal');
+    const closeRulesBtn = document.getElementById('close-rules-btn');
+    const mainMenu = document.getElementById('main-menu');
+    const levelGrid = document.getElementById('level-grid');
+    const levelCompleteModal = document.getElementById('level-complete');
+    const nextLevelBtn = document.getElementById('next-level-btn');
+    const tabBasic = document.getElementById('tab-basic');
+    const tabHard = document.getElementById('tab-hard');
+
+    // 게임 상태
+    let currentDifficulty = 'basic'; // 'basic' | 'hard'
+    let currentLevel = 0;
+    
+    let unlocked = {
+        basic: parseInt(localStorage.getItem('laserBasicUnlocked_v2')) || 1,
+        hard: parseInt(localStorage.getItem('laserHardUnlocked_v2')) || 1
+    };
+    if (unlocked.basic > 20) unlocked.basic = 20;
+    if (unlocked.hard > 20) unlocked.hard = 20;
+    
+    let activeTab = 'basic'; 
+    let state = 'menu'; // menu, playing, won
+    
+    // 레벨 데이터
+    let basicLevels = []; // 고정 네모칸 방식 4x4 (20단계)
+    let hardLevels = [];  // 초고난도 자유 배치 5x5 (20단계)
+    let currentPairs = [];
+    let currentAllowedSlots = []; // 기본 모드용 고정 네모칸 {x, y}
+    let grid = []; 
+    let activeLasers = []; 
+    
+    // 동적 그리기 변수
+    const CANVAS_SIZE = 600;
+    let GRID_SIZE = 4;
+    let GRID_WIDTH = 360; 
+    let OFFSET_X = 120;
+    let OFFSET_Y = 120;
+    let CELL_SIZE = 90;
+    let NODE_SIZE = 44;
+
+    function updateDimensions(gridSize) {
+        GRID_SIZE = gridSize;
+        if (GRID_SIZE === 5) {
+            GRID_WIDTH = 380;
+            OFFSET_X = 110;
+            OFFSET_Y = 110;
+            CELL_SIZE = GRID_WIDTH / GRID_SIZE; // 76
+            NODE_SIZE = 38;
+        } else {
+            GRID_WIDTH = 360;
+            OFFSET_X = 120;
+            OFFSET_Y = 120;
+            CELL_SIZE = GRID_WIDTH / GRID_SIZE; // 90
+            NODE_SIZE = 44;
+        }
+    }
+    
+    // 테마
+    const THEMES = [
+        {emoji: '🍎', color: '#ef4444'}, // Red
+        {emoji: '💧', color: '#3b82f6'}, // Blue
+        {emoji: '🌿', color: '#10b981'}, // Green
+        {emoji: '⭐', color: '#facc15'}, // Yellow
+        {emoji: '☂', color: '#a855f7'}, // Purple
+        {emoji: '🍊', color: '#f97316'}, // Orange
+        {emoji: '🌙', color: '#06b6d4'}, // Cyan
+        {emoji: '🌸', color: '#ec4899'}, // Pink
+        {emoji: '❄️', color: '#93c5fd'}, // Light Blue
+        {emoji: '🔥', color: '#f87171'}  // Light Red
+    ];
+
+    // 난수 생성기
+    let seed = 98765;
+    function random() {
+        let t = seed += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+    
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    function resizeCanvas() {
+        const isLargeScreen = window.innerWidth >= 1024;
+        const maxWidth = isLargeScreen ? window.innerWidth * 0.5 : window.innerWidth * 0.9;
+        const maxHeight = window.innerHeight * 0.65;
+        const size = Math.min(maxWidth, maxHeight, 600);
+        
+        canvas.style.width = `${size}px`;
+        canvas.style.height = `${size}px`;
+        canvas.width = CANVAS_SIZE;
+        canvas.height = CANVAS_SIZE;
+        if(state === 'playing' || state === 'won') draw();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function getGridCenter(cx, cy) {
+        return {
+            x: OFFSET_X + cx * CELL_SIZE + CELL_SIZE / 2,
+            y: OFFSET_Y + cy * CELL_SIZE + CELL_SIZE / 2
+        };
+    }
+
+    function getPerimeterPos(side, index) {
+        const centerOffset = CELL_SIZE / 2;
+        const margin = 8;
+        if (side === 0) return { x: OFFSET_X + index * CELL_SIZE + centerOffset, y: OFFSET_Y - NODE_SIZE/2 - margin }; // Top
+        if (side === 1) return { x: OFFSET_X + GRID_SIZE * CELL_SIZE + NODE_SIZE/2 + margin, y: OFFSET_Y + index * CELL_SIZE + centerOffset }; // Right
+        if (side === 2) return { x: OFFSET_X + index * CELL_SIZE + centerOffset, y: OFFSET_Y + GRID_SIZE * CELL_SIZE + NODE_SIZE/2 + margin }; // Bottom
+        if (side === 3) return { x: OFFSET_X - NODE_SIZE/2 - margin, y: OFFSET_Y + index * CELL_SIZE + centerOffset }; // Left
+    }
+
+    function isSlotAllowed(x, y) {
+        if (currentDifficulty === 'hard') return true; // 어려움 5x5 모드는 모든 칸 허용
+        return currentAllowedSlots.some(slot => slot.x === x && slot.y === y);
+    }
+
+    function simulateTrace(startNode, currentGrid) {
+        const gSize = currentGrid.length;
+        let cx = -1, cy = -1, dx = 0, dy = 0;
+        
+        if(startNode.side === 0) { cx = startNode.index; cy = 0; dx = 0; dy = 1; }
+        else if(startNode.side === 1) { cx = gSize - 1; cy = startNode.index; dx = -1; dy = 0; }
+        else if(startNode.side === 2) { cx = startNode.index; cy = gSize - 1; dx = 0; dy = -1; }
+        else if(startNode.side === 3) { cx = 0; cy = startNode.index; dx = 1; dy = 0; }
+        
+        let path = [getPerimeterPos(startNode.side, startNode.index)];
+        let bounces = 0;
+        
+        while(cx >= 0 && cx < gSize && cy >= 0 && cy < gSize) {
+            path.push(getGridCenter(cx, cy));
+            if (currentGrid[cy][cx] === 1) { // '/' 거울
+                let temp = dx; dx = -dy; dy = -temp;
+                bounces++;
+            } 
+            else if (currentGrid[cy][cx] === 2) { // '\' 거울
+                let temp = dx; dx = dy; dy = temp;
+                bounces++;
+            }
+            cx += dx; cy += dy;
+        }
+        
+        let endSide, endIdx;
+        if(cy < 0) { endSide = 0; endIdx = cx; }
+        else if(cx >= gSize) { endSide = 1; endIdx = cy; }
+        else if(cy >= gSize) { endSide = 2; endIdx = cx; }
+        else if(cx < 0) { endSide = 3; endIdx = cy; }
+        
+        path.push(getPerimeterPos(endSide, endIdx));
+        
+        return { endNode: {side: endSide, index: endIdx}, path: path, bounces: bounces };
+    }
+
+    // 기본 모드 (고정 네모칸 4x4)
+    function generateBasicLevelData(targetPairs, slotCount) {
+        let pairs = [];
+        let slots = [];
+        let attempts = 0;
+        const gSize = 4;
+        
+        while (pairs.length < targetPairs && attempts < 5000) {
+            attempts++;
+            let allCoords = [];
+            for (let r = 0; r < gSize; r++) {
+                for (let c = 0; c < gSize; c++) {
+                    allCoords.push({x: c, y: r});
+                }
+            }
+            shuffleArray(allCoords);
+            let candidateSlots = allCoords.slice(0, slotCount);
+            
+            let tempGrid = Array(gSize).fill().map(() => Array(gSize).fill(0));
+            candidateSlots.forEach(s => {
+                if (random() > 0.2) { 
+                    tempGrid[s.y][s.x] = Math.floor(random() * 2) + 1;
+                }
+            });
+            
+            let foundPairs = [];
+            let visited = new Set();
+            
+            for(let side = 0; side < 4; side++) {
+                for(let idx = 0; idx < gSize; idx++) {
+                    let startKey = `${side}-${idx}`;
+                    if(visited.has(startKey)) continue;
+                    
+                    let trace = simulateTrace({side, index: idx}, tempGrid);
+                    let endKey = `${trace.endNode.side}-${trace.endNode.index}`;
+                    
+                    visited.add(startKey);
+                    visited.add(endKey);
+                    
+                    if(trace.bounces >= 1) {
+                        foundPairs.push({
+                            start: {side, index: idx},
+                            end: trace.endNode,
+                            connected: false
+                        });
+                    }
+                }
+            }
+            
+            if (foundPairs.length >= targetPairs) {
+                shuffleArray(foundPairs);
+                pairs = foundPairs.slice(0, targetPairs).map((p, idx) => ({
+                    ...p,
+                    emoji: THEMES[idx % THEMES.length].emoji,
+                    color: THEMES[idx % THEMES.length].color
+                }));
+                slots = candidateSlots;
+            }
+        }
+        
+        return { pairs, allowedSlots: slots };
+    }
+
+    // 어려움 모드 (5x5 자유 배치 - 고난도)
+    function generate5x5HardLevelData(targetPairs, targetMirrors) {
+        let pairs = [];
+        let attempts = 0;
+        const gSize = 5;
+        
+        while (pairs.length < targetPairs && attempts < 8000) {
+            attempts++;
+            let tempGrid = Array(gSize).fill().map(() => Array(gSize).fill(0));
+            let mirrorsPlaced = 0;
+            
+            while (mirrorsPlaced < targetMirrors) {
+                let rx = Math.floor(random() * gSize);
+                let ry = Math.floor(random() * gSize);
+                if (tempGrid[ry][rx] === 0) {
+                    tempGrid[ry][rx] = Math.floor(random() * 2) + 1;
+                    mirrorsPlaced++;
+                }
+            }
+            
+            let foundPairs = [];
+            let visited = new Set();
+            
+            for(let side = 0; side < 4; side++) {
+                for(let idx = 0; idx < gSize; idx++) {
+                    let startKey = `${side}-${idx}`;
+                    if(visited.has(startKey)) continue;
+                    
+                    let trace = simulateTrace({side, index: idx}, tempGrid);
+                    let endKey = `${trace.endNode.side}-${trace.endNode.index}`;
+                    
+                    visited.add(startKey);
+                    visited.add(endKey);
+                    
+                    // 반사가 최소 2회 이상 발생하고 시작점과 끝점이 다른 고난도 반사선만 채택
+                    if(trace.bounces >= 2 && startKey !== endKey) {
+                        foundPairs.push({
+                            start: {side, index: idx},
+                            end: trace.endNode,
+                            connected: false
+                        });
+                    }
+                }
+            }
+            
+            if (foundPairs.length >= targetPairs) {
+                shuffleArray(foundPairs);
+                pairs = foundPairs.slice(0, targetPairs).map((p, idx) => ({
+                    ...p,
+                    emoji: THEMES[idx % THEMES.length].emoji,
+                    color: THEMES[idx % THEMES.length].color
+                }));
+            }
+        }
+        return pairs;
+    }
+
+    function generateAllLevels() {
+        // 기본 모드 (고정 네모칸 4x4, 20단계)
+        seed = 443322;
+        for (let i = 0; i < 20; i++) {
+            let targetPairs = 2;
+            if (i >= 4) targetPairs = 3;
+            if (i >= 9) targetPairs = 4;
+            if (i >= 14) targetPairs = 5;
+            if (i >= 18) targetPairs = 6;
+            
+            let slotCount = 4 + Math.floor(i * 0.4); // 네모칸 4개 ~ 11개
+            basicLevels.push(generateBasicLevelData(targetPairs, slotCount));
+        }
+
+        // 어려움 모드 (5x5 자유 배치 초고난도, 20단계)
+        seed = 998877;
+        for (let i = 0; i < 20; i++) {
+            let targetPairs = 4;
+            if (i >= 4) targetPairs = 5;
+            if (i >= 9) targetPairs = 6;
+            if (i >= 14) targetPairs = 7;
+            if (i >= 18) targetPairs = 8;
+            
+            let mirrorCount = 6 + Math.floor(i * 0.65); // 배치된 거울 수 6개 ~ 18개
+            hardLevels.push(generate5x5HardLevelData(targetPairs, mirrorCount));
+        }
+    }
+
+    function initMenu() {
+        levelGrid.innerHTML = '';
+        const levelCount = 20;
+        const currentUnlocked = activeTab === 'basic' ? unlocked.basic : unlocked.hard;
+        
+        for (let i = 0; i < levelCount; i++) {
+            const btn = document.createElement('button');
+            btn.className = `w-12 h-12 rounded-xl font-bold text-lg flex items-center justify-center transition-all ${
+                i < currentUnlocked 
+                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]' 
+                    : 'bg-indigo-900/50 text-indigo-700 cursor-not-allowed border border-indigo-800'
+            }`;
+            btn.innerText = i + 1;
+            if (i < currentUnlocked) {
+                btn.onclick = () => loadLevel(activeTab, i);
+            }
+            levelGrid.appendChild(btn);
+        }
+        
+        if (activeTab === 'basic') {
+            tabBasic.className = 'tab-btn tab-active';
+            tabHard.className = 'tab-btn tab-inactive';
+        } else {
+            tabBasic.className = 'tab-btn tab-inactive';
+            tabHard.className = 'tab-btn tab-active';
+        }
+
+        mainMenu.classList.remove('hidden');
+        state = 'menu';
+    }
+
+    tabBasic.addEventListener('click', () => { activeTab = 'basic'; initMenu(); });
+    tabHard.addEventListener('click', () => { activeTab = 'hard'; initMenu(); });
+
+    function loadLevel(diff, index) {
+        currentDifficulty = diff;
+        currentLevel = index;
+        
+        if (currentDifficulty === 'basic') {
+            updateDimensions(4);
+            const levelData = basicLevels[currentLevel];
+            currentPairs = JSON.parse(JSON.stringify(levelData.pairs));
+            currentAllowedSlots = levelData.allowedSlots;
+            levelDisplay.innerText = `기본 ${currentLevel + 1}단계 / 20`;
+            instructionText.innerText = `강조된 [네모칸]에만 거울을 둘 수 있습니다. 클릭해 거울을 회전하세요!`;
+        } else {
+            updateDimensions(5);
+            const levelData = hardLevels[currentLevel];
+            currentPairs = JSON.parse(JSON.stringify(levelData));
+            currentAllowedSlots = [];
+            levelDisplay.innerText = `어려움 (5x5) ${currentLevel + 1}단계 / 20`;
+            instructionText.innerText = `5x5 전체 영역을 자유롭게 활용하세요! 그림 쌍의 수가 훨씬 많아집니다.`;
+        }
+        
+        grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+        
+        state = 'playing';
+        mainMenu.classList.add('hidden');
+        levelCompleteModal.classList.add('hidden');
+        
+        updateLasers();
+        draw();
+    }
+
+    function updateLasers() {
+        activeLasers = [];
+        let allConnected = true;
+        
+        currentPairs.forEach(pair => {
+            let trace = simulateTrace(pair.start, grid);
+            let hitTarget = (trace.endNode.side === pair.end.side && trace.endNode.index === pair.end.index);
+            pair.connected = hitTarget;
+            
+            activeLasers.push({
+                path: trace.path,
+                color: pair.color,
+                connected: hitTarget
+            });
+            
+            if (!hitTarget) allConnected = false;
+        });
+        
+        if (allConnected && state === 'playing') {
+            state = 'won';
+            
+            if (currentDifficulty === 'basic') {
+                if (currentLevel + 1 >= unlocked.basic && currentLevel + 1 < 20) {
+                    unlocked.basic = currentLevel + 2;
+                    localStorage.setItem('laserBasicUnlocked_v2', unlocked.basic);
+                }
+            } else {
+                if (currentLevel + 1 >= unlocked.hard && currentLevel + 1 < 20) {
+                    unlocked.hard = currentLevel + 2;
+                    localStorage.setItem('laserHardUnlocked_v2', unlocked.hard);
+                }
+            }
+            
+            setTimeout(() => {
+                const msgEl = document.getElementById('complete-msg');
+                if (currentLevel === 19) {
+                    if (currentDifficulty === 'basic') {
+                        msgEl.innerText = "기본 20단계를 모두 클리어했습니다!\n극악의 5x5 '어려움 모드'에 도전해 보세요!";
+                    } else {
+                        msgEl.innerText = "축하합니다!\n5x5 초고난도 20단계까지 모든 퍼즐을 완벽 클리어하셨습니다!";
+                    }
+                    nextLevelBtn.innerText = "메뉴로 돌아가기";
+                } else {
+                    msgEl.innerText = "모든 그림의 레이저가 성공적으로 연결되었습니다.";
+                    nextLevelBtn.innerText = "다음 단계로";
+                }
+                levelCompleteModal.classList.remove('hidden');
+            }, 600);
+        }
+    }
+
+    function handleInteraction(evt) {
+        if (state !== 'playing') return;
+        evt.preventDefault();
+        
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        let clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+        let clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+        
+        const x = (clientX - rect.left) * scaleX;
+        const y = (clientY - rect.top) * scaleY;
+        
+        if (x >= OFFSET_X && x <= OFFSET_X + GRID_WIDTH &&
+            y >= OFFSET_Y && y <= OFFSET_Y + GRID_WIDTH) {
+            
+            const gridX = Math.floor((x - OFFSET_X) / CELL_SIZE);
+            const gridY = Math.floor((y - OFFSET_Y) / CELL_SIZE);
+            
+            if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
+                if (!isSlotAllowed(gridX, gridY)) return;
+
+                grid[gridY][gridX] = (grid[gridY][gridX] + 1) % 3; // 0 -> 1 -> 2 -> 0
+                
+                updateLasers();
+                draw();
+            }
+        }
+    }
+
+    function handleMouseMove(evt) {
+        if (state !== 'playing') return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        const x = (evt.clientX - rect.left) * scaleX;
+        const y = (evt.clientY - rect.top) * scaleY;
+        
+        if (x >= OFFSET_X && x <= OFFSET_X + GRID_WIDTH &&
+            y >= OFFSET_Y && y <= OFFSET_Y + GRID_WIDTH) {
+            const gridX = Math.floor((x - OFFSET_X) / CELL_SIZE);
+            const gridY = Math.floor((y - OFFSET_Y) / CELL_SIZE);
+            
+            if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
+                if (isSlotAllowed(gridX, gridY)) {
+                    canvas.style.cursor = 'pointer';
+                    return;
+                }
+            }
+        }
+        canvas.style.cursor = 'default';
+    }
+
+    canvas.addEventListener('mousedown', handleInteraction);
+    canvas.addEventListener('touchstart', handleInteraction, {passive: false});
+    canvas.addEventListener('mousemove', handleMouseMove);
+
+    resetBtn.addEventListener('click', () => { if(state === 'playing') loadLevel(currentDifficulty, currentLevel); });
+    menuBtn.addEventListener('click', initMenu);
+    rulesBtn.addEventListener('click', () => rulesModal.classList.remove('hidden'));
+    closeRulesBtn.addEventListener('click', () => rulesModal.classList.add('hidden'));
+    rulesModal.addEventListener('click', (e) => { if (e.target === rulesModal) rulesModal.classList.add('hidden'); });
+
+    nextLevelBtn.addEventListener('click', () => {
+        if (currentLevel + 1 < 20) loadLevel(currentDifficulty, currentLevel + 1);
+        else initMenu();
+    });
+
+    function draw() {
+        ctx.fillStyle = '#2e2b5e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 1. 그리드 칸 및 '네모칸' 테두리 그리기
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const cellX = OFFSET_X + x * CELL_SIZE + 3;
+                const cellY = OFFSET_Y + y * CELL_SIZE + 3;
+                const cellSize = CELL_SIZE - 6;
+                const isAllowed = isSlotAllowed(x, y);
+
+                // 전체 그리드 판 (4x4 / 5x5) 기본 셀 그리기
+                ctx.fillStyle = 'rgba(30, 27, 75, 0.5)';
+                ctx.strokeStyle = 'rgba(99, 102, 241, 0.25)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.roundRect(cellX, cellY, cellSize, cellSize, 8);
+                ctx.fill();
+                ctx.stroke();
+
+                // 거울 설치가 가능한 [네모칸] 위치에만 강조 박스 그리기
+                if (isAllowed) {
+                    ctx.fillStyle = '#3f3c75';
+                    ctx.beginPath();
+                    ctx.roundRect(cellX, cellY, cellSize, cellSize, 10);
+                    ctx.fill();
+
+                    if (currentDifficulty === 'basic') {
+                        ctx.lineWidth = 2.5;
+                        ctx.strokeStyle = '#818cf8';
+                        ctx.stroke();
+
+                        // 네모칸 모서리 장식 포인트
+                        ctx.fillStyle = '#c7d2fe';
+                        ctx.fillRect(cellX + 2, cellY + 2, 4, 4);
+                        ctx.fillRect(cellX + cellSize - 6, cellY + 2, 4, 4);
+                        ctx.fillRect(cellX + 2, cellY + cellSize - 6, 4, 4);
+                        ctx.fillRect(cellX + cellSize - 6, cellY + cellSize - 6, 4, 4);
+                    }
+                }
+            }
+        }
+
+        // 2. 레이저 광선 그리기
+        ctx.globalCompositeOperation = 'screen';
+        activeLasers.forEach(laser => {
+            if (laser.path.length < 2) return;
+            
+            ctx.shadowBlur = laser.connected ? 20 : 8;
+            ctx.shadowColor = laser.color;
+            ctx.lineWidth = laser.connected ? (GRID_SIZE === 5 ? 5 : 6) : 3;
+            ctx.strokeStyle = laser.color;
+            
+            ctx.beginPath();
+            ctx.moveTo(laser.path[0].x, laser.path[0].y);
+            for (let i = 1; i < laser.path.length; i++) {
+                ctx.lineTo(laser.path[i].x, laser.path[i].y);
+            }
+            ctx.stroke();
+            
+            ctx.shadowBlur = 0;
+            ctx.lineWidth = laser.connected ? 2.5 : 1;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+        });
+        ctx.globalCompositeOperation = 'source-over';
+
+        // 3. 설치된 양면 거울 그리기
+        ctx.shadowBlur = 0;
+        ctx.lineCap = 'round';
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const mirrorType = grid[y][x];
+                if (mirrorType === 0) continue;
+                
+                const cx = OFFSET_X + x * CELL_SIZE + CELL_SIZE / 2;
+                const cy = OFFSET_Y + y * CELL_SIZE + CELL_SIZE / 2;
+                const mSize = CELL_SIZE * 0.35;
+                
+                ctx.lineWidth = GRID_SIZE === 5 ? 7 : 8;
+                ctx.strokeStyle = '#93c5fd'; 
+                ctx.beginPath();
+                if (mirrorType === 1) { // '/'
+                    ctx.moveTo(cx - mSize, cy + mSize);
+                    ctx.lineTo(cx + mSize, cy - mSize);
+                } else if (mirrorType === 2) { // '\'
+                    ctx.moveTo(cx - mSize, cy - mSize);
+                    ctx.lineTo(cx + mSize, cy + mSize);
+                }
+                ctx.stroke();
+                
+                ctx.lineWidth = 2.5;
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+            }
+        }
+
+        // 4. 그림 아이콘 노드 그리기
+        const drawNode = (nodeDef, isConnected) => {
+            const pos = getPerimeterPos(nodeDef.side, nodeDef.index);
+            
+            ctx.shadowBlur = isConnected ? 15 : 5;
+            ctx.shadowColor = nodeDef.color;
+            ctx.fillStyle = isConnected ? nodeDef.color : '#1e1b4b';
+            
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, NODE_SIZE / 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = nodeDef.color;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            ctx.font = GRID_SIZE === 5 ? '20px Arial' : '25px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(nodeDef.emoji, pos.x, pos.y + 1);
+        };
+
+        currentPairs.forEach(pair => {
+            drawNode({...pair.start, color: pair.color, emoji: pair.emoji}, pair.connected);
+            drawNode({...pair.end, color: pair.color, emoji: pair.emoji}, pair.connected);
+        });
+    }
+
+    function animate() {
+        if(state === 'playing' || state === 'won') {
+             draw();
+        }
+        requestAnimationFrame(animate);
+    }
+
+    // 초기화
+    generateAllLevels();
+    resizeCanvas();
+    initMenu();
+    animate();
+
+</script>
+</body>
+</html>
